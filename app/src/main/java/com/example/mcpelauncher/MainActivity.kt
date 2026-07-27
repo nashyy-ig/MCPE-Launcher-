@@ -63,7 +63,15 @@ fun LauncherScreen(store: VersionStore, activity: ComponentActivity) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("BLOCK LAUNCHER", fontWeight = FontWeight.Bold) },
+                title = { Text("NYL UI", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://msha.ke/cyph3rw0rks.org"))
+                        activity.startActivity(intent)
+                    }) {
+                        Icon(Icons.Filled.Link, contentDescription = "Open NYL UI website")
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     titleContentColor = GrassGreen
