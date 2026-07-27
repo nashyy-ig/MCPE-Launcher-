@@ -50,4 +50,8 @@ fun BlockLauncherTheme(content: @Composable () -> Unit) {
             titleLarge = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
             bodyLarge = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
             bodyMedium = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-            labelLarge = MaterialTheme.typography.labelLarge.copy(fontFamily = FontFamily.
+            labelLarge = MaterialTheme.typography.labelLarge.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
+        ),
+        content = content
+    )
+}
