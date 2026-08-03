@@ -13,17 +13,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 private val BlockColorScheme = darkColorScheme(
-    primary = GrassGreen,
+    primary = AmethystPurple,
     onPrimary = OffWhite,
-    secondary = GoldOre,
-    onSecondary = Obsidian,
-    tertiary = DiamondCyan,
-    background = DeepSlate,
+    secondary = AmethystGlow,
+    onSecondary = OledBlack,
+    tertiary = AmethystGlow,
+    background = OledBlack,
     onBackground = OffWhite,
-    surface = Obsidian,
+    surface = CardBlack,
     onSurface = OffWhite,
-    surfaceVariant = StoneGray,
-    outline = DirtBrown,
+    surfaceVariant = CardBlack,
+    outline = AmethystPurple,
 )
 
 private val BlockShapes = Shapes(
