@@ -240,6 +240,7 @@ fun LauncherScreen(store: VersionStore, activity: ComponentActivity) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun WebViewScreen(url: String, onBack: () -> Unit) {
