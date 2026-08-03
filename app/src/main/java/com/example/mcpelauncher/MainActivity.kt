@@ -272,6 +272,7 @@ fun WebViewScreen(url: String, onBack: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VersionCard(
     version: McpeVersion,
