@@ -13,6 +13,7 @@ import java.io.File
 data class McpeVersion(
     val id: String,
     val label: String,
+    val displayName: String,
     val versionName: String,
     val packageName: String,
     val apkFileName: String,
@@ -28,16 +29,18 @@ class VersionStore(private val context: Context) {
     fun all(): List<McpeVersion> {
         val raw = prefs.getString("list", "[]") ?: "[]"
         val arr = JSONArray(raw)
-        return (0 until arr.length()).map { i ->
+        val list = (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
             McpeVersion(
                 id = o.getString("id"),
                 label = o.getString("label"),
+                displayName = o.optString("displayName", o.getString("label")),
                 versionName = o.getString("versionName"),
                 packageName = o.getString("packageName"),
                 apkFileName = o.getString("apkFileName"),
             )
         }
+        return list.sortedWith(compareByDescending(VersionComparator) { it.versionName })
     }
 
     fun add(version: McpeVersion) {
@@ -45,6 +48,15 @@ class VersionStore(private val context: Context) {
         list.removeAll { it.id == version.id }
         list.add(version)
         save(list)
+    }
+
+    fun rename(version: McpeVersion, newName: String) {
+        val list = all().toMutableList()
+        val idx = list.indexOfFirst { it.id == version.id }
+        if (idx != -1) {
+            list[idx] = list[idx].copy(displayName = newName)
+            save(list)
+        }
     }
 
     fun remove(version: McpeVersion) {
@@ -60,6 +72,7 @@ class VersionStore(private val context: Context) {
             arr.put(JSONObject().apply {
                 put("id", v.id)
                 put("label", v.label)
+                put("displayName", v.displayName)
                 put("versionName", v.versionName)
                 put("packageName", v.packageName)
                 put("apkFileName", v.apkFileName)
@@ -67,4 +80,17 @@ class VersionStore(private val context: Context) {
         }
         prefs.edit().putString("list", arr.toString()).apply()
     }
+}
+
+/** Compares version strings like "1.20.10" part-by-part numerically. */
+private val VersionComparator = Comparator<String> { a, b ->
+    val partsA = a.split(".", "-").mapNotNull { it.toIntOrNull() }
+    val partsB = b.split(".", "-").mapNotNull { it.toIntOrNull() }
+    val size = maxOf(partsA.size, partsB.size)
+    for (i in 0 until size) {
+        val x = partsA.getOrElse(i) { 0 }
+        val y = partsB.getOrElse(i) { 0 }
+        if (x != y) return@Comparator x - y
+    }
+    0
 }
