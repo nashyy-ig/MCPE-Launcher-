@@ -1,11 +1,12 @@
 package com.example.mcpelauncher
 
+import android.annotation.SuppressLint
 import android.content.Intent
-import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,13 +27,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
-import com.example.mcpelauncher.ui.theme.BlockLauncherTheme
-import com.example.mcpelauncher.ui.theme.DiamondCyan
-import com.example.mcpelauncher.ui.theme.GoldOre
-import com.example.mcpelauncher.ui.theme.GrassGreen
-import com.example.mcpelauncher.ui.theme.Obsidian
-import com.example.mcpelauncher.ui.theme.DeepSlate
+import com.example.mcpelauncher.ui.theme.*
 import java.io.File
 import java.util.UUID
 
@@ -54,6 +51,7 @@ class MainActivity : ComponentActivity() {
 
 private const val NYL_UI_URL = "https://msha.ke/cyph3rw0rks.org"
 private const val NYL_CLIENT_URL = "https://msha.ke/cyph3rw0rks_projects"
+private const val GITHUB_URL = "https://github.com/nashyy-ig/NYL-UI-mcpe-launcher"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,10 +59,17 @@ fun LauncherScreen(store: VersionStore, activity: ComponentActivity) {
     var versions by remember { mutableStateOf(store.all()) }
     var menuExpanded by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
+    var showWebView by remember { mutableStateOf(false) }
+    var renamingVersion by remember { mutableStateOf<McpeVersion?>(null) }
     val pm = activity.packageManager
 
     fun refresh() { versions = store.all() }
     fun openUrl(url: String) { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+
+    if (showWebView) {
+        WebViewScreen(url = NYL_UI_URL, onBack = { showWebView = false })
+        return
+    }
 
     val pickApk = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -84,10 +89,18 @@ fun LauncherScreen(store: VersionStore, activity: ComponentActivity) {
                         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                             DropdownMenuItem(
                                 text = { Text("NYL UI") },
-                                leadingIcon = { Icon(Icons.Filled.Link, contentDescription = null) },
+                                leadingIcon = { Icon(Icons.Filled.Public, contentDescription = null) },
                                 onClick = {
                                     menuExpanded = false
-                                    openUrl(NYL_UI_URL)
+                                    showWebView = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("GitHub") },
+                                leadingIcon = { Icon(Icons.Filled.Code, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    openUrl(GITHUB_URL)
                                 }
                             )
                             DropdownMenuItem(
@@ -103,7 +116,7 @@ fun LauncherScreen(store: VersionStore, activity: ComponentActivity) {
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
-                    titleContentColor = GrassGreen
+                    titleContentColor = AmethystGlow
                 )
             )
         },
@@ -111,7 +124,7 @@ fun LauncherScreen(store: VersionStore, activity: ComponentActivity) {
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { pickApk.launch(arrayOf("application/vnd.android.package-archive")) },
-                containerColor = GrassGreen,
+                containerColor = AmethystPurple,
                 contentColor = Color.Black,
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                 text = { Text("ADD VERSION", fontWeight = FontWeight.Bold) },
@@ -122,9 +135,7 @@ fun LauncherScreen(store: VersionStore, activity: ComponentActivity) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(listOf(DeepSlate, Obsidian))
-                )
+                .background(Brush.verticalGradient(listOf(OledBlack, CardBlack)))
         ) {
             if (versions.isEmpty()) {
                 Box(
@@ -168,7 +179,8 @@ fun LauncherScreen(store: VersionStore, activity: ComponentActivity) {
                             onRemove = {
                                 store.remove(version)
                                 refresh()
-                            }
+                            },
+                            onRename = { renamingVersion = version }
                         )
                     }
                 }
@@ -192,10 +204,68 @@ fun LauncherScreen(store: VersionStore, activity: ComponentActivity) {
                     Text("• AM4IM0N")
                     Spacer(Modifier.height(16.dp))
                     TextButton(onClick = { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(NYL_CLIENT_URL))) }) {
-                        Icon(Icons.Filled.Link, contentDescription = null, tint = DiamondCyan)
+                        Icon(Icons.Filled.Link, contentDescription = null, tint = AmethystGlow)
                         Spacer(Modifier.width(6.dp))
-                        Text("Nyl Client", color = DiamondCyan)
+                        Text("Nyl Client", color = AmethystGlow)
                     }
+                }
+            }
+        )
+    }
+
+    renamingVersion?.let { version ->
+        var text by remember(version.id) { mutableStateOf(version.displayName) }
+        AlertDialog(
+            onDismissRequest = { renamingVersion = null },
+            title = { Text("Rename version") },
+            text = {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    singleLine = true,
+                    label = { Text("Display name") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    store.rename(version, text.ifBlank { version.label })
+                    renamingVersion = null
+                    refresh()
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { renamingVersion = null }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun WebViewScreen(url: String, onBack: () -> Unit) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("NYL UI") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = CardBlack,
+                    titleContentColor = AmethystGlow
+                )
+            )
+        }
+    ) { padding ->
+        AndroidView(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            factory = { context ->
+                WebView(context).apply {
+                    settings.javaScriptEnabled = true
+                    webViewClient = WebViewClient()
+                    loadUrl(url)
                 }
             }
         )
@@ -210,17 +280,16 @@ fun VersionCard(
     onLaunch: () -> Unit,
     onSwitch: () -> Unit,
     onRemove: () -> Unit,
+    onRename: () -> Unit,
 ) {
     ElevatedCard(
         shape = RoundedCornerShape(22.dp),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.elevatedCardColors(containerColor = CardBlack),
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                brush = Brush.linearGradient(
-                    listOf(MaterialTheme.colorScheme.surface, Obsidian)
-                ),
+                brush = Brush.linearGradient(listOf(CardBlack, OledBlack)),
                 shape = RoundedCornerShape(22.dp)
             )
     ) {
@@ -231,7 +300,7 @@ fun VersionCard(
                         .size(40.dp)
                         .background(
                             Brush.linearGradient(
-                                if (isActive) listOf(GrassGreen, DiamondCyan) else listOf(DiamondCyan, GoldOre)
+                                if (isActive) listOf(AmethystPurple, AmethystGlow) else listOf(AmethystGlow, AmethystPurple)
                             ),
                             shape = RoundedCornerShape(14.dp)
                         ),
@@ -241,15 +310,18 @@ fun VersionCard(
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(version.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(version.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text("v${version.versionName}", style = MaterialTheme.typography.bodySmall, color = GoldOre)
+                }
+                IconButton(onClick = onRename) {
+                    Icon(Icons.Filled.Edit, contentDescription = "Rename", tint = AmethystGlow)
                 }
                 if (isActive) {
                     AssistChip(
                         onClick = {},
                         label = { Text("ACTIVE") },
                         shape = RoundedCornerShape(50),
-                        colors = AssistChipDefaults.assistChipColors(labelColor = GrassGreen)
+                        colors = AssistChipDefaults.assistChipColors(labelColor = AmethystGlow)
                     )
                 }
             }
@@ -259,7 +331,7 @@ fun VersionCard(
                     Button(
                         onClick = onLaunch,
                         shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = GrassGreen)
+                        colors = ButtonDefaults.buttonColors(containerColor = AmethystPurple)
                     ) {
                         Icon(Icons.Filled.PlayArrow, contentDescription = null)
                         Spacer(Modifier.width(4.dp))
@@ -269,7 +341,7 @@ fun VersionCard(
                     Button(
                         onClick = onSwitch,
                         shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = DiamondCyan)
+                        colors = ButtonDefaults.buttonColors(containerColor = AmethystGlow)
                     ) {
                         Icon(Icons.Filled.SwapHoriz, contentDescription = null)
                         Spacer(Modifier.width(4.dp))
@@ -312,6 +384,7 @@ private fun addVersionFromUri(activity: ComponentActivity, store: VersionStore, 
         McpeVersion(
             id = UUID.randomUUID().toString(),
             label = label,
+            displayName = label,
             versionName = info.versionName ?: "unknown",
             packageName = info.packageName,
             apkFileName = fileName,
