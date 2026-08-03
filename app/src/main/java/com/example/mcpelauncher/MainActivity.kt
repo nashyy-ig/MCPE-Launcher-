@@ -2,6 +2,7 @@ package com.example.mcpelauncher
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
@@ -61,6 +62,8 @@ fun LauncherScreen(store: VersionStore, activity: ComponentActivity) {
     var showAbout by remember { mutableStateOf(false) }
     var showWebView by remember { mutableStateOf(false) }
     var renamingVersion by remember { mutableStateOf<McpeVersion?>(null) }
+    var showAddChoice by remember { mutableStateOf(false) }
+    var showInstalledPicker by remember { mutableStateOf(false) }
     val pm = activity.packageManager
 
     fun refresh() { versions = store.all() }
@@ -123,7 +126,7 @@ fun LauncherScreen(store: VersionStore, activity: ComponentActivity) {
         containerColor = Color.Transparent,
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { pickApk.launch(arrayOf("application/vnd.android.package-archive")) },
+                onClick = { showAddChoice = true },
                 containerColor = AmethystPurple,
                 contentColor = Color.Black,
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
@@ -145,7 +148,7 @@ fun LauncherScreen(store: VersionStore, activity: ComponentActivity) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Filled.Extension, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outline)
                         Spacer(Modifier.height(12.dp))
-                        Text("No versions yet.\nTap ADD VERSION to import an MCPE APK\nyou already have.", textAlign = TextAlign.Center)
+                        Text("No versions yet.\nTap ADD VERSION to import an MCPE APK\nor add one that's already installed.", textAlign = TextAlign.Center)
                     }
                 }
             } else {
@@ -186,6 +189,38 @@ fun LauncherScreen(store: VersionStore, activity: ComponentActivity) {
                 }
             }
         }
+    }
+
+    if (showAddChoice) {
+        AlertDialog(
+            onDismissRequest = { showAddChoice = false },
+            title = { Text("Add a version") },
+            text = { Text("Import an APK file, or add an app that's already installed on this device.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showAddChoice = false
+                    pickApk.launch(arrayOf("application/vnd.android.package-archive"))
+                }) { Text("From APK file") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showAddChoice = false
+                    showInstalledPicker = true
+                }) { Text("Already installed") }
+            }
+        )
+    }
+
+    if (showInstalledPicker) {
+        InstalledAppPickerDialog(
+            pm = pm,
+            onDismiss = { showInstalledPicker = false },
+            onPick = { appInfo ->
+                addVersionFromInstalledApp(pm, store, appInfo.packageName)
+                showInstalledPicker = false
+                refresh()
+            }
+        )
     }
 
     if (showAbout) {
@@ -241,6 +276,62 @@ fun LauncherScreen(store: VersionStore, activity: ComponentActivity) {
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun InstalledAppPickerDialog(
+    pm: PackageManager,
+    onDismiss: () -> Unit,
+    onPick: (ApplicationInfo) -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val apps = remember {
+        pm.getInstalledApplications(PackageManager.GET_META_DATA)
+            .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
+            .sortedBy { pm.getApplicationLabel(it).toString().lowercase() }
+    }
+    val filtered = remember(query) {
+        if (query.isBlank()) apps
+        else apps.filter { pm.getApplicationLabel(it).toString().contains(query, ignoreCase = true) }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Choose an installed app") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    label = { Text("Search") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                    items(filtered, key = { it.packageName }) { app ->
+                        val label = pm.getApplicationLabel(app).toString()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(label, fontWeight = FontWeight.Bold)
+                                Text(app.packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                            }
+                            TextButton(onClick = { onPick(app) }) { Text("Add") }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun WebViewScreen(url: String, onBack: () -> Unit) {
@@ -284,6 +375,7 @@ fun VersionCard(
     onRemove: () -> Unit,
     onRename: () -> Unit,
 ) {
+    val canAutoSwitch = version.apkFileName != null
     ElevatedCard(
         shape = RoundedCornerShape(22.dp),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
@@ -314,6 +406,9 @@ fun VersionCard(
                 Column(Modifier.weight(1f)) {
                     Text(version.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text("v${version.versionName}", style = MaterialTheme.typography.bodySmall, color = GoldOre)
+                    if (!canAutoSwitch) {
+                        Text("No saved APK \u2014 can't auto-reinstall", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    }
                 }
                 IconButton(onClick = onRename) {
                     Icon(Icons.Filled.Edit, contentDescription = "Rename", tint = AmethystGlow)
@@ -339,7 +434,7 @@ fun VersionCard(
                         Spacer(Modifier.width(4.dp))
                         Text("PLAY")
                     }
-                } else {
+                } else if (canAutoSwitch || isInstalled) {
                     Button(
                         onClick = onSwitch,
                         shape = RoundedCornerShape(16.dp),
@@ -348,6 +443,10 @@ fun VersionCard(
                         Icon(Icons.Filled.SwapHoriz, contentDescription = null)
                         Spacer(Modifier.width(4.dp))
                         Text(if (isInstalled) "REMOVE OTHER BUILD" else "SWITCH TO THIS")
+                    }
+                } else {
+                    OutlinedButton(onClick = {}, enabled = false, shape = RoundedCornerShape(16.dp)) {
+                        Text("UNAVAILABLE")
                     }
                 }
                 OutlinedButton(onClick = onRemove, shape = RoundedCornerShape(16.dp)) {
@@ -394,8 +493,24 @@ private fun addVersionFromUri(activity: ComponentActivity, store: VersionStore, 
     )
 }
 
+private fun addVersionFromInstalledApp(pm: PackageManager, store: VersionStore, packageName: String) {
+    val packageInfo = try { pm.getPackageInfo(packageName, 0) } catch (e: PackageManager.NameNotFoundException) { return }
+    val label = try { pm.getApplicationLabel(packageInfo.applicationInfo!!).toString() } catch (e: Exception) { packageName }
+
+    store.add(
+        McpeVersion(
+            id = UUID.randomUUID().toString(),
+            label = label,
+            displayName = label,
+            versionName = packageInfo.versionName ?: "unknown",
+            packageName = packageName,
+            apkFileName = null,
+        )
+    )
+}
+
 private fun installApk(activity: ComponentActivity, store: VersionStore, version: McpeVersion) {
-    val file = store.apkFile(version)
+    val file = store.apkFile(version) ?: return
     val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", file)
     val intent = Intent(Intent.ACTION_VIEW).apply {
         setDataAndType(uri, "application/vnd.android.package-archive")
